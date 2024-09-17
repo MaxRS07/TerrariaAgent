@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!-- Import tModLoader mod properties -->
+	<Import Project="..\tModLoader.targets" />
+
+	<!-- General -->
+	<PropertyGroup>
+	</PropertyGroup>
+
+	<!-- References -->
+	<ItemGroup>
+		
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Remove="Brain\" />
+	  <None Remove="System\" />
+	</ItemGroup>
+	<ItemGroup>
+	  <Folder Include="Brain\" />
+	  <Folder Include="System\" />
+	</ItemGroup>
+</Project>

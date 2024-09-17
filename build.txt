@@ -1,0 +1,3 @@
+displayName = Terraria Agent
+author = Max
+version = 0.1
