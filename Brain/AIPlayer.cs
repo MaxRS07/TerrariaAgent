@@ -14,16 +14,26 @@ namespace TAgent.Brain
 
         public bool Training
         {
-            get => agent != null && agent.active;
+            get => agent != null && agent.Active;
         }
 
         public override void PreUpdateMovement()
         {
+            base.PreUpdateMovement();
+        }
+        public override void PostUpdate()
+        {
+            
+            base.PostUpdate();
+        }
+        public override void PreUpdate()
+        {
             if (agent != null)
             {
-                if (agent.active)
+                if (agent.Active)
                     agent.Update();
             }
+            base.PreUpdate();
         }
         public override void ProcessTriggers(TriggersSet triggersSet)
         {
@@ -31,24 +41,39 @@ namespace TAgent.Brain
             {
                 if (!Training)
                 {
-                    agent = new PlayerAgent(Player);
-                    if (agent.active)
+                    agent = new PlayerAgent(Player.whoAmI, 2, 2);
+                    if (agent.Active)
                         Main.NewText($"Training Started");
                     else
                         Main.NewText("Connection Failed :(");
                 } else
                 {
-                    agent.
+                    agent?.Close();
+                    Main.NewText($"Training Ended. Brain Saved.");
                 }
             }
+            base.ProcessTriggers(triggersSet);
         }
     }
     public class PlayerAgent : Agent
     {
-        private readonly Player player;
+        private readonly int playerWhoAmI;
 
-        public PlayerAgent(Player player, string server = "127.0.0.1", int port = 65432) : base(server, port) {
-            this.player = player;
+        private Player Player
+        {
+            get => Main.player[playerWhoAmI];
+        }
+
+        /// <summary>
+        /// Makes a player agent
+        /// </summary>
+        /// <param name="player"></param>
+        /// <param name="numObservations">number of floating point observations inputted</param>
+        /// <param name="numActions">number of floating point actions returned</param>
+        /// <param name="server"></param>
+        /// <param name="port"></param>
+        public PlayerAgent(int player, int numObservations, int numActions, string server = "127.0.0.1", int port = 65432) : base(server, port, numObservations, numActions) {
+            playerWhoAmI = player;
         }
         public override void OnBegin()
         {
@@ -56,13 +81,19 @@ namespace TAgent.Brain
         }
         public override void Heuristic(float[] actions)
         {
-            if (Math.Round(actions[0]) == 1) {
-                player.JumpMovement();
+            Main.NewText(string.Join(", ", actions));
+            if (actions[0] > actions[1]) {
+                PlayerInput.Triggers.Current.Left = true;
+            } else
+            {
+                PlayerInput.Triggers.Current.Right = true;
             }
+
+            SetReward(Player.direction);
         }
         public override void CollectObservations(VectorSensor sensor)
         {
-            sensor.AddObservation(1.0f);
+            sensor.AddVector2(new(1f, 1f));
             //sensor.AddVector2(player.velocity);
             //sensor.AddVector2(player.position - Main.screenPosition);
 

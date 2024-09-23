@@ -9,7 +9,7 @@ namespace TAgent.Brain
 {
     public abstract class Agent
     {
-        public bool active
+        public bool Active
         {
             get { return client.Connected; }
         }
@@ -18,12 +18,19 @@ namespace TAgent.Brain
         private readonly int port;
         private readonly string addr;
 
+        private readonly int numObservations;
+        private readonly int numDiscrete;
+        private readonly int numContinuous;
+
         private TcpClient client;
 
-        public Agent(string addr, int port)
+        public Agent(string addr, int port, int numDiscrete, int numContinuous, int numObservations)
         {
             this.addr = addr;
             this.port = port;
+            this.numObservations = numObservations;
+            this.numDiscrete = numDiscrete;
+            this.numContinuous = numContinuous;
 
             StartClient();
         }
@@ -32,9 +39,18 @@ namespace TAgent.Brain
             try
             {
                 client = new(addr, port);
+
+                var info = new byte[12];
+                var discrete = BitConverter.GetBytes(numDiscrete);
+                var continuous = BitConverter.GetBytes(numContinuous);
+                var observations = BitConverter.GetBytes(numObservations);
+
+                observations.CopyTo(info, 0);
+                discrete.CopyTo(info, 4);
+                continuous.CopyTo(info, 8);
+
                 var stream = client.GetStream();
-                var info = new byte[] { 1, 1 };
-                stream.Write(info, 0, 2);
+                stream.Write(info, 0, 12);
             }
             catch (Exception e)
             {
@@ -51,25 +67,43 @@ namespace TAgent.Brain
         }
         public abstract void CollectObservations(VectorSensor sensor);
 
+        /// <summary>
+        /// probably set rewards here
+        /// </summary>
+        /// <param name="actions"></param>
         public abstract void Heuristic(float[] actions);
 
         public abstract void OnBegin();
 
         private void SendSensor()
         {
-            var bytes = new byte[sensor.ObservationCount * 4];
-            Buffer.BlockCopy(sensor.GetObservations(), 0, bytes, 0, bytes.Length);
-
+            if (sensor.ObservationCount > numObservations)
+            {
+                Main.NewText($"Warning: Sensor exceeds expected length", Color.Red);
+                Close();
+            }
+            var obs = new float[numObservations];
+            for (int i = 0; i < sensor.ObservationCount; i++)
+            {
+                var ob = sensor.GetObservations()[i];
+                obs[i] = ob;
+            }
+            var bytes = new byte[4 + sensor.ObservationCount * 4];
+            Buffer.BlockCopy(sensor.GetObservations(), 0, bytes, 4, sensor.ObservationCount * 4);
+            BitConverter.GetBytes(reward).CopyTo(bytes, 0);
             NetworkStream stream = client.GetStream();
-
-            stream.Write(BitConverter.GetBytes(reward), 0, 4);
             stream.Write(bytes, 0, bytes.Length);
+            sensor.Clear();
         }
         private float[] ReadActions()
         {
-            var actions = new float[64];
+            var actions = new float[numContinuous + numDiscrete];
             NetworkStream stream = client.GetStream();
-            var read = new byte[256]; //num discretes
+            var read = new byte[actions.Length * 4];
+            if (read.Length < 4)
+            {
+                return Array.Empty<float>();
+            }
             stream.Read(read, 0, read.Length);
             for (int i = 0; i < read.Length; i += 4)
             {
@@ -80,14 +114,16 @@ namespace TAgent.Brain
         }
         public void Update()
         {
-            Main.NewText("agent update");
             CollectObservations(sensor);
             SendSensor();
 
             sensor.Clear();
 
-            //var actions = ReadActions();
-            //Heuristic(actions);
+            if (client.Available >= 4)
+            {
+                var actions = ReadActions();
+                Heuristic(actions);
+            }
         }
         public void Close()
         {
